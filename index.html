@@ -9686,7 +9686,9 @@ renderizarResumenVisualBalance = function() {
   })();
   const eficienciaEnsProm = (() => { const num=fechas.reduce((s,iso)=>s+Number(samNumeradorPorArea.ENSAMBLE[iso]||0),0); const den=fechas.reduce((s,iso)=>s+Number(mod8Horas(mod8SemanaDesdeIso(iso))||0)*60*Number(optimo.porArea?.ENSAMBLE?.porSemana?.[iso]||0),0); return den>0?num/den:0; })();
   const eficienciaWebProm = (() => { const num=fechas.reduce((s,iso)=>s+Number(samNumeradorPorArea.WEBBING[iso]||0),0); const den=fechas.reduce((s,iso)=>s+Number(mod8Horas(mod8SemanaDesdeIso(iso))||0)*60*Number(optimo.porArea?.WEBBING?.porSemana?.[iso]||0),0); return den>0?num/den:0; })();
-  const samRow = fechas.map(iso => `<td>${samPonderadoPorSemana[iso] > 0 ? samPonderadoPorSemana[iso].toFixed(2) : '—'}</td>`).join('');
+  const samRow = fechas.map((iso, i) => i === 0
+    ? `<td><input type="number" class="mod8-hc-optimo-input" data-sam-inicial="${iso}" min="0" step="any" value="${Number((samPonderadoPorSemana[iso] || 0).toFixed(6))}" aria-label="SAM ponderado primera semana" title="Editar SAM ponderado; ajusta proporcionalmente los SAM de las operaciones del balance" /></td>`
+    : `<td>${samPonderadoPorSemana[iso] > 0 ? samPonderadoPorSemana[iso].toFixed(2) : '—'}</td>`).join('');
   const samEnsRow = fechas.map(iso => `<td>${samPonderadoPorArea.ENSAMBLE[iso] > 0 ? samPonderadoPorArea.ENSAMBLE[iso].toFixed(2) : '—'}</td>`).join('');
   const samWebRow = fechas.map(iso => `<td>${samPonderadoPorArea.WEBBING[iso] > 0 ? samPonderadoPorArea.WEBBING[iso].toFixed(2) : '—'}</td>`).join('');
   const unidadesTotal = fechas.reduce((s,iso)=>s+(unidadesProgramadasPorSemana[iso]||0),0);
@@ -9750,6 +9752,37 @@ document.addEventListener('change', function(e) {
   const iso = inp.dataset.demandaInicial;
   const registros = (src.datosFiltrados || []).filter(r => fechaISO(r.fecha) === iso && !esLineaExcluida(r.linea));
   mod8DistribuirDemanda(registros, demanda);
+  aplicarFiltros();
+}, true);
+
+// Ajuste del SAM ponderado en los datos del balance activo.
+function mod8AjustarSamPonderado(registros, objetivo) {
+  const grupos = new Map();
+  registros.forEach(r => {
+    const key = JSON.stringify([r.linea, r.orden, r.estilo, r.cliente]);
+    if (!grupos.has(key)) grupos.set(key, { unidades: Number(r.unidades) || 0, filas: [] });
+    grupos.get(key).filas.push(r);
+  });
+  const items = [...grupos.values()];
+  const unidades = items.reduce((s,g) => s + g.unidades, 0);
+  const minutos = items.reduce((s,g) => s + g.unidades * g.filas.reduce((t,r) => t + Number(r.sam || 0), 0), 0);
+  const actual = unidades > 0 ? minutos / unidades : 0;
+  items.forEach(g => g.filas.forEach(r => {
+    r.sam = actual > 0 ? Number(r.sam || 0) * objetivo / actual : objetivo / g.filas.length;
+    r.hc = calcularHC(r.sam, r.unidades, horasPorFecha(r.fecha), r.eficiencia / 100);
+  }));
+}
+document.addEventListener('change', function(e) {
+  const inp = e.target.closest('[data-sam-inicial]');
+  if (!inp) return;
+  const objetivo = Number(inp.value);
+  if (!inp.value.trim() || !Number.isFinite(objetivo) || objetivo < 0) {
+    renderizarResumenVisualBalance();
+    return;
+  }
+  const src = getEstadoActivo();
+  const registros = (src.datosFiltrados || []).filter(r => fechaISO(r.fecha) === inp.dataset.samInicial && !esLineaExcluida(r.linea));
+  mod8AjustarSamPonderado(registros, objetivo);
   aplicarFiltros();
 }, true);
 
