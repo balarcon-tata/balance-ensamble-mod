@@ -9658,7 +9658,9 @@ renderizarResumenVisualBalance = function() {
   const optWebRow = fechas.map(iso => { const v=Number(optimo.porArea?.WEBBING?.porSemana?.[iso] || 0); return `<td><input type="number" class="mod8-hc-optimo-input" data-hc-optimo-area="WEBBING" data-hc-optimo-iso="${iso}" min="0" step="1" value="${v.toFixed(0)}" title="HC óptimo Webbing editable" /></td>`; }).join('');
   const optEnsProm = optimo.porArea?.ENSAMBLE ? optimo.porArea.ENSAMBLE.promedio.toFixed(1) : '—';
   const optWebProm = optimo.porArea?.WEBBING ? optimo.porArea.WEBBING.promedio.toFixed(1) : '—';
-  const unidadesRow = fechas.map(iso => `<td>${unidadesProgramadasPorSemana[iso] > 0 ? Math.round(unidadesProgramadasPorSemana[iso]).toLocaleString('en-US') : '—'}</td>`).join('');
+  const unidadesRow = fechas.map((iso, i) => i === 0
+    ? `<td><input type="number" class="mod8-hc-optimo-input" data-demanda-inicial="${iso}" min="0" step="1" value="${Math.round(unidadesProgramadasPorSemana[iso] || 0)}" aria-label="Demanda primera semana" title="Editar demanda de la primera semana visible; distribuye proporcionalmente entre las órdenes visibles" /></td>`
+    : `<td>${unidadesProgramadasPorSemana[iso] > 0 ? Math.round(unidadesProgramadasPorSemana[iso]).toLocaleString('en-US') : '—'}</td>`).join('');
   const costoUnitEnsRow = fechas.map(iso => { const unidades = Number(unidadesProgramadasPorSemana[iso] || 0); const det = optimo.porArea?.ENSAMBLE?.detalle?.find(x => x.iso === iso) || {}; const costo = Number(det.costo || 0); return `<td>${unidades > 0 && costo > 0 ? '$' + (costo / unidades).toFixed(4) : '—'}</td>`; }).join('');
   const costoUnitWebRow = fechas.map(iso => { const unidades = Number(unidadesProgramadasPorSemana[iso] || 0); const det = optimo.porArea?.WEBBING?.detalle?.find(x => x.iso === iso) || {}; const costo = Number(det.costo || 0); return `<td>${unidades > 0 && costo > 0 ? '$' + (costo / unidades).toFixed(4) : '—'}</td>`; }).join('');
   const costoUnitEnsProm = (() => { const unidades = fechas.reduce((s,iso)=>s+Number(unidadesProgramadasPorSemana[iso] || 0),0); const costo = optimo.porArea?.ENSAMBLE?.detalle?.reduce((s,x)=>s+Number(x.costo || 0),0) || 0; return unidades > 0 && costo > 0 ? '$' + (costo / unidades).toFixed(4) : '—'; })();
@@ -9712,6 +9714,44 @@ renderizarResumenVisualBalance = function() {
   mod8ProgramarSyncBackend(450);
 };
 
+
+// Distribuir demanda en órdenes únicas, conservando unidades enteras y el mix.
+function mod8DistribuirDemanda(registros, demanda) {
+  const grupos = new Map();
+  registros.forEach(r => {
+    const key = JSON.stringify([r.linea, r.orden, r.estilo, r.cliente]);
+    if (!grupos.has(key)) grupos.set(key, { unidades: Number(r.unidades) || 0, filas: [] });
+    grupos.get(key).filas.push(r);
+  });
+  const items = [...grupos.values()];
+  const total = items.reduce((s, g) => s + g.unidades, 0);
+  let asignadas = 0;
+  items.forEach(g => {
+    const exactas = demanda * (total > 0 ? g.unidades / total : 1 / items.length);
+    g.nuevas = Math.floor(exactas);
+    g.resto = exactas - g.nuevas;
+    asignadas += g.nuevas;
+  });
+  [...items].sort((a,b) => b.resto - a.resto).slice(0, demanda - asignadas).forEach(g => g.nuevas++);
+  items.forEach(g => g.filas.forEach(r => {
+    r.unidades = g.nuevas;
+    r.hc = calcularHC(r.sam, r.unidades, horasPorFecha(r.fecha), r.eficiencia / 100);
+  }));
+}
+document.addEventListener('change', function(e) {
+  const inp = e.target.closest('[data-demanda-inicial]');
+  if (!inp) return;
+  const demanda = Number(inp.value);
+  if (!inp.value.trim() || !Number.isSafeInteger(demanda) || demanda < 0) {
+    renderizarResumenVisualBalance();
+    return;
+  }
+  const src = getEstadoActivo();
+  const iso = inp.dataset.demandaInicial;
+  const registros = (src.datosFiltrados || []).filter(r => fechaISO(r.fecha) === iso && !esLineaExcluida(r.linea));
+  mod8DistribuirDemanda(registros, demanda);
+  aplicarFiltros();
+}, true);
 
 // HC óptimo editable por semana. El valor manual alimenta eficiencia, costo, gráfica y backend.
 document.addEventListener('change', function(e) {
