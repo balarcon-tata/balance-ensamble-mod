@@ -6328,7 +6328,7 @@ function esLineaWebbing(linea) {
 
 function obtenerDesgloseHCChart(fechasBase) {
   const src = getEstadoActivo ? getEstadoActivo() : null;
-  const filasBase = src ? (src.resumenFilas || []).filter(f => !esLineaExcluida(f.linea)) : [];
+  const filasBase = src ? (src.resumenFilas || []).filter(f => lineaIncluidaEnConsolidado(f.linea)) : [];
   const desglose = {};
 
   fechasBase.forEach(iso => {
@@ -6523,7 +6523,7 @@ function renderizarResumenVisualBalance() {
   if (!section || !badges || !cards || !tabla) return;
 
   const src = getEstadoActivo();
-  const filasBase = (src.resumenFilas || []).filter(f => !esLineaExcluida(f.linea));
+  const filasBase = (src.resumenFilas || []).filter(f => lineaIncluidaEnConsolidado(f.linea));
   const fechas = src.fechasColumnas || [];
 
   if (!filasBase.length || !fechas.length) {
@@ -7583,7 +7583,7 @@ function exportarExcel() {
 
   const srcExport = getEstadoActivo();
   const todasLineas = [...new Set(srcExport.datosFinales.map(r => r.linea))].filter(Boolean);
-  const lineasSinTommy = todasLineas.filter(l => !esLineaExcluida(l)).sort((a, b) => a.localeCompare(b, 'es'));
+  const lineasSinTommy = todasLineas.filter(l => lineaIncluidaEnConsolidado(l)).sort((a, b) => a.localeCompare(b, 'es'));
 
   // Fechas únicas globales ordenadas
   const setFechas = new Set(srcExport.datosFinales.map(r => fechaISO(r.fecha)));
@@ -8661,6 +8661,10 @@ esLineaExcluida = function(linea) {
   return normLinea(linea) === normLinea('80000 Pivot Atraque Sin ruta');
 };
 
+function lineaIncluidaEnConsolidado(linea) {
+  return !esLineaExcluida(linea) || lineasSeleccionadas.has(linea);
+}
+
 // Semanas virtuales: estas funciones hacen que el resto del balance trate cada semana como columna.
 nombreEncabezadoDia = function(iso) {
   const sem = mod8SemanaDesdeIso(iso);
@@ -9299,7 +9303,7 @@ renderizarResumenVisualBalance = function() {
   if (!section || !badges || !cards || !tabla) return;
   mod8AsegurarPanelParametros();
   const src = getEstadoActivo();
-  const filasBase = (src.resumenFilas || []).filter(f => !esLineaExcluida(f.linea));
+  const filasBase = (src.resumenFilas || []).filter(f => lineaIncluidaEnConsolidado(f.linea));
   const fechas = src.fechasColumnas || [];
   if (!filasBase.length || !fechas.length) {
     badges.innerHTML = ''; cards.innerHTML = ''; tabla.innerHTML = '<div class="balance-visual-empty">El resumen aparecerá cuando exista un balance calculado.</div>';
@@ -9585,7 +9589,7 @@ renderizarResumenVisualBalance = function() {
   const sub     = document.getElementById('balanceResumenVisualSub');
   if (!section || !badges || !cards || !tabla) return;
   const src = getEstadoActivo();
-  const filasBase = (src.resumenFilas || []).filter(g => !esLineaExcluida(g.linea));
+  const filasBase = (src.resumenFilas || []).filter(g => lineaIncluidaEnConsolidado(g.linea));
   const fechas = (src.fechasColumnas && src.fechasColumnas.length) ? src.fechasColumnas : MOD8_SEMANAS.map(mod8IsoSemana);
   if (!filasBase.length || !fechas.length) {
     badges.innerHTML = ''; cards.innerHTML = ''; tabla.innerHTML = '<div class="balance-visual-empty">El resumen aparecera cuando exista un balance calculado.</div>';
@@ -9766,7 +9770,7 @@ document.addEventListener('change', function(e) {
   }
   const src = getEstadoActivo();
   const iso = inp.dataset.demandaInicial;
-  const registros = (src.datosFiltrados || []).filter(r => fechaISO(r.fecha) === iso && !esLineaExcluida(r.linea));
+  const registros = (src.datosFiltrados || []).filter(r => fechaISO(r.fecha) === iso && lineaIncluidaEnConsolidado(r.linea));
   mod8DistribuirDemanda(registros, demanda);
   aplicarFiltros();
 }, true);
@@ -9797,7 +9801,7 @@ document.addEventListener('change', function(e) {
     return;
   }
   const src = getEstadoActivo();
-  const registros = (src.datosFiltrados || []).filter(r => fechaISO(r.fecha) === inp.dataset.samInicial && !esLineaExcluida(r.linea));
+  const registros = (src.datosFiltrados || []).filter(r => fechaISO(r.fecha) === inp.dataset.samInicial && lineaIncluidaEnConsolidado(r.linea));
   mod8AjustarSamPonderado(registros, objetivo);
   aplicarFiltros();
 }, true);
@@ -9868,7 +9872,7 @@ function mod8ErrorTexto(err){
 
 function mod8SnapshotSemanalBackend(){
   const src = getEstadoActivo ? getEstadoActivo() : null;
-  const filasBase = (src?.resumenFilas || []).filter(g => !esLineaExcluida(g.linea));
+  const filasBase = (src?.resumenFilas || []).filter(g => lineaIncluidaEnConsolidado(g.linea));
   const fechas = (src?.fechasColumnas && src.fechasColumnas.length) ? src.fechasColumnas : MOD8_SEMANAS.map(mod8IsoSemana);
   if (!filasBase.length || !fechas.length) return [];
 
@@ -10058,7 +10062,7 @@ exportarExcel = function() {
   const wb_xl = XLSX.utils.book_new();
   const srcExport = getEstadoActivo();
   const todasLineas = [...new Set(srcExport.datosFinales.map(r => r.linea))].filter(Boolean);
-  const lineasSinTommy = todasLineas.filter(l => !esLineaExcluida(l)).sort((a, b) => a.localeCompare(b, 'es'));
+  const lineasSinTommy = todasLineas.filter(l => lineaIncluidaEnConsolidado(l)).sort((a, b) => a.localeCompare(b, 'es'));
   const setFechas = new Set(srcExport.datosFinales.map(r => fechaISO(r.fecha)));
   const fechas = [...setFechas].sort(typeof mod8OrdenarFechas === 'function' ? mod8OrdenarFechas : undefined);
   const nFechas = fechas.length;
@@ -10073,7 +10077,7 @@ exportarExcel = function() {
   wsRes['!ref'] = XLSX.utils.encode_range({s:{c:0,r:0}, e:{c:nColsRes-1, r:resAoa.length-1}}); setColWidths(wsRes, [30, ...fechas.map(() => 10), 10]); formatearHoja(wsRes, resAoa.length, nColsRes, 0, resAoa.length - 1); XLSX.utils.book_append_sheet(wb_xl, wsRes, 'Resumen');
 
   const opMap = new Map();
-  srcExport.datosFinales.filter(r => !esLineaExcluida(r.linea)).forEach(r => {
+  srcExport.datosFinales.filter(r => lineaIncluidaEnConsolidado(r.linea)).forEach(r => {
     const op = r.operacion || 'Sin operacion'; const key = `${op}|${r.etapa || ''}`;
     if (!opMap.has(key)) opMap.set(key, { operacion: op, etapa: r.etapa || '', sam: Number(r.sam || 0), dias: {}, total: 0 });
     const rec = opMap.get(key); const iso = fechaISO(r.fecha); const hc = Number(r.hc || 0);
